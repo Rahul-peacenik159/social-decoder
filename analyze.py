@@ -74,17 +74,17 @@ def main():
         print("  Continuing with empty profile data ...")
         profile_summary = {"name": slug}
 
-    # ── Step 2: Fetch posts ────────────────────────────────────────
-    print(f"\nStep 2: Fetching last {args.max_posts} posts ...")
+    # ── Step 2: Extract posts from profile response ────────────────
+    print(f"\nStep 2: Extracting posts from profile data ...")
     posts = []
     try:
-        posts = linkedin_posts.fetch_posts_via_scraper(slug, api_key, max_posts=args.max_posts)
-        print(f"  ✓ {len(posts)} posts retrieved")
+        posts = linkedin_posts.extract_from_profile(raw_profile, max_posts=args.max_posts)
+        print(f"  ✓ {len(posts)} posts extracted")
         (output_dir / "raw_posts.json").write_text(
             json.dumps(posts, indent=2), encoding="utf-8"
         )
     except Exception as e:
-        print(f"  ✗ Posts fetch failed: {e}")
+        print(f"  ✗ Posts extraction failed: {e}")
         print("  Continuing with empty posts ...")
 
     # ── Step 3: Screenshots ────────────────────────────────────────

@@ -34,19 +34,31 @@ def fetch(slug: str, api_key: str) -> dict:
 def extract_summary(profile: dict) -> dict:
     """
     Extract key fields from raw profile response into a clean summary.
+    Handles ScrapingDog's actual field names from /profile?type=company endpoint.
     """
+    # about field may be a string or dict
+    about = profile.get("about") or ""
+    if isinstance(about, dict):
+        about = ""
+
+    specialties = profile.get("specialties") or ""
+    if isinstance(specialties, list):
+        specialties = ", ".join(str(s) for s in specialties)
+
     return {
-        "name": profile.get("name") or profile.get("companyName") or "",
+        "name": profile.get("company_name") or profile.get("name") or "",
         "tagline": profile.get("tagline") or "",
-        "description": profile.get("description") or "",
-        "website": profile.get("website") or profile.get("websiteUrl") or "",
-        "industry": profile.get("industry") or "",
-        "company_size": profile.get("companySize") or profile.get("employeeCount") or "",
-        "follower_count": profile.get("followerCount") or profile.get("followersCount") or "",
-        "headquarters": profile.get("headquartersCity") or profile.get("headquarters") or "",
-        "founded": profile.get("foundedOn") or profile.get("founded") or "",
-        "specialties": profile.get("specialties") or [],
-        "logo_url": profile.get("logoUrl") or profile.get("logo") or "",
+        "description": about,
+        "website": profile.get("website") or "",
+        "industry": profile.get("industry") or profile.get("industries") or "",
+        "company_size": profile.get("company_size") or profile.get("company_size_on_linkedin") or "",
+        "follower_count": profile.get("follower_count") or "",
+        "headquarters": profile.get("headquarters") or profile.get("location") or "",
+        "founded": profile.get("founded") or "",
+        "specialties": specialties,
+        "logo_url": profile.get("profile_photo") or "",
+        "funding": profile.get("last_round_funding") or "",
+        "funding_round": profile.get("last_round_type") or "",
     }
 
 

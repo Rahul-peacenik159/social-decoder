@@ -1,77 +1,54 @@
 """
-Fetch last N LinkedIn company posts via ScrapingDog general scraper.
-ScrapingDog free tier: 1000 credits/month.
-Scraping a LinkedIn page costs ~5 credits. We fetch 1 page = ~10 posts.
+Extract LinkedIn company posts from the profile API response.
+ScrapingDog's /profile?type=company endpoint returns up to 10 posts
+in the 'updates' field — no extra API calls needed.
+
+For individual post detail (more fields), use /profile/post?id=POST_ID (5 credits each).
 """
 
+import re
 import requests
 import json
 import os
-import re
-from bs4 import BeautifulSoup
 
 
-SCRAPINGDOG_SCRAPER_URL = "https://api.scrapingdog.com/scrape"
-
-
-def _scrape_url(url: str, api_key: str, dynamic: bool = True) -> str:
-    """Use ScrapingDog general scraper to fetch a URL."""
-    params = {
-        "api_key": api_key,
-        "url": url,
-        "dynamic": "true" if dynamic else "false",
-    }
-    resp = requests.get(SCRAPINGDOG_SCRAPER_URL, params=params, timeout=60)
-    resp.raise_for_status()
-    return resp.text
-
-
-def _parse_posts_from_html(html: str) -> list:
+def extract_from_profile(raw_profile: dict, max_posts: int = 10) -> list:
     """
-    Parse post cards from LinkedIn company posts page HTML.
-    LinkedIn renders posts in <div data-id="..."> or similar containers.
-    We look for common patterns and extract text content + metadata.
+    Extract posts from the 'updates' field of a ScrapingDog company profile response.
+    Each update has: text, article_posted_date, total_likes, article_title,
+                     article_sub_title, article_link
     """
-    soup = BeautifulSoup(html, "lxml")
+    updates = raw_profile.get("updates") or []
     posts = []
 
-    # LinkedIn post containers — several selectors to try
-    selectors = [
-        "div.occludable-update",
-        "div[data-urn]",
-        "article",
-        "div.feed-shared-update-v2",
-    ]
-
-    containers = []
-    for sel in selectors:
-        containers = soup.select(sel)
-        if containers:
-            break
-
-    if not containers:
-        # Fallback: grab all large text blocks
-        containers = soup.find_all("p")
-
-    for i, container in enumerate(containers[:10]):
-        # Extract text
-        text = container.get_text(separator=" ", strip=True)
-        if len(text) < 30:
+    for i, item in enumerate(updates[:max_posts]):
+        if not isinstance(item, dict):
             continue
 
-        # Try to find image
-        img = container.find("img")
-        img_url = img.get("src", "") if img else ""
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
 
-        # Try to extract post URN / ID
-        urn = (
-            container.get("data-urn", "")
-            or container.get("data-id", "")
-            or container.get("id", "")
-        )
+        # Extract post URN from article_link
+        # e.g. .../posts/cyera_ai-is-moving-fast-activity-7450890859102867456-fQxG
+        link = item.get("article_link") or ""
+        urn = ""
+        m = re.search(r"activity-(\d+)-", link)
+        if m:
+            urn = m.group(1)
 
-        # Detect if video (look for video tag or common video keywords)
-        is_video = bool(container.find("video")) or "video" in container.get("class", [])
+        # Detect image or video from article metadata
+        img_url = item.get("article_image") or item.get("image_url") or ""
+        is_video = "video" in str(item.get("article_title", "")).lower()
+
+        # Engagement
+        likes = _parse_int(item.get("total_likes") or 0)
+        comments = _parse_int(item.get("total_comments") or item.get("comments") or 0)
+        shares = _parse_int(item.get("total_shares") or item.get("shares") or 0)
+
+        # Post type
+        has_article = bool(item.get("article_title") or item.get("article_sub_title"))
+        ptype = "video" if is_video else ("article" if has_article else ("image" if img_url else "text"))
 
         posts.append({
             "index": i + 1,
@@ -79,42 +56,27 @@ def _parse_posts_from_html(html: str) -> list:
             "text": text[:1000],
             "img_url": img_url,
             "is_video": is_video,
-            "type": "video" if is_video else ("image" if img_url else "text"),
+            "type": ptype,
+            "likes": likes,
+            "comments": comments,
+            "shares": shares,
+            "posted": item.get("article_posted_date") or "",
+            "link": link,
+            "article_title": item.get("article_title") or "",
+            "article_subtitle": item.get("article_sub_title") or "",
         })
 
     return posts
-
-
-def fetch_posts_via_scraper(slug: str, api_key: str, max_posts: int = 10) -> list:
-    """
-    Scrape the LinkedIn company posts page.
-    URL: https://www.linkedin.com/company/{slug}/posts/
-    Returns list of post dicts.
-    """
-    url = f"https://www.linkedin.com/company/{slug}/posts/?feedView=all"
-    print(f"  Scraping {url} ...")
-
-    try:
-        html = _scrape_url(url, api_key, dynamic=True)
-    except requests.HTTPError as e:
-        print(f"  ScrapingDog error: {e}")
-        return []
-
-    posts = _parse_posts_from_html(html)
-    print(f"  Parsed {len(posts)} posts from HTML")
-    return posts[:max_posts]
 
 
 def fetch_post_detail(post_id: str, api_key: str) -> dict:
     """
     Fetch individual post via ScrapingDog /profile/post endpoint.
     Cost: 5 credits per call. Use sparingly on free tier.
+    post_id: the numeric activity ID extracted from the post URL.
     """
     url = "https://api.scrapingdog.com/profile/post"
-    params = {
-        "api_key": api_key,
-        "id": post_id,
-    }
+    params = {"api_key": api_key, "id": post_id}
     try:
         resp = requests.get(url, params=params, timeout=30)
         resp.raise_for_status()
@@ -127,9 +89,17 @@ def fetch_post_detail(post_id: str, api_key: str) -> dict:
         return {}
 
 
+def _parse_int(val) -> int:
+    try:
+        return int(str(val).replace(",", "").strip())
+    except Exception:
+        return 0
+
+
 if __name__ == "__main__":
     import sys
-    slug = sys.argv[1] if len(sys.argv) > 1 else "cyera"
-    key = os.environ.get("SCRAPINGDOG_API_KEY", "")
-    posts = fetch_posts_via_scraper(slug, key)
+    profile_path = sys.argv[1] if len(sys.argv) > 1 else "output/cyera/raw_profile.json"
+    with open(profile_path) as f:
+        raw = json.load(f)
+    posts = extract_from_profile(raw)
     print(json.dumps(posts, indent=2))
