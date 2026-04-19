@@ -66,6 +66,10 @@ Write a crisp 40-word positioning brief for their social presence: who they are,
 - Use exact phrases from their posts where possible
 - If post data is sparse, note the limitation and work with what is available
 - Do not hallucinate engagement numbers — only report what is in the data
-- Format as clean Markdown with headers, bullets, and clear sections
+- Format as clean Markdown with headers and bullet points
+- IMPORTANT: Do NOT use **bold** markdown anywhere in bullet point content. Write all bullet text as plain sentences only. Bold may only appear in the section headings.
+- For section 1 "Recurring language patterns": if you find no recurring language patterns or phrases, write exactly "No recurring language patterns found in the last 10 posts." as a single bullet instead of leaving it blank.
+- For section 2 "Content Strategy Breakdown": always produce a table with exactly 3 columns: | Type | Posts | % | — where % is the percentage of total posts (e.g. 30%). Include only categories that appear at least once.
+- When referencing specific posts by number (Post 1, Post 2, etc.), always use the format "Post N" exactly — this enables hyperlinks in the generated PPTX.
 
 ## Source data follows below.
