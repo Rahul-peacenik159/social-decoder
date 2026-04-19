@@ -50,17 +50,6 @@ jobs:
           python analyze.py "${{ github.event.inputs.linkedin_slug }}" \
             --max-posts "${{ github.event.inputs.max_posts }}"
 
-      - name: Commit output
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/Rahul-peacenik159/social-decoder.git
-          git add output/
-          git diff --cached --quiet || git commit -m "decode: ${{ github.event.inputs.linkedin_slug }} $(date -u +%Y%m%d-%H%M)"
-          git push
-
       - name: Upload output as artifact
         uses: actions/upload-artifact@v4
         with:
